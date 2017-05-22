@@ -10,6 +10,7 @@
 #include "Life_Plant.h"
 #include "Terrain_Earth.h"
 #include "Utils.h"
+#include "GridIterator.h"
 
 #include <iostream>
 using namespace std;
@@ -98,14 +99,14 @@ void Environment::setRenderer(SDL_Renderer* in_renderer) {
 }
 
 void Environment::setColourMapDefault() {
-    colour_map[COLOUR_ID_NULL]->r = 20;//34;
-    colour_map[COLOUR_ID_NULL]->g = 20;//25;
-    colour_map[COLOUR_ID_NULL]->b = 20;//13;
+    colour_map[COLOUR_ID_NULL]->r = 31;//34;
+    colour_map[COLOUR_ID_NULL]->g = 31;//25;
+    colour_map[COLOUR_ID_NULL]->b = 31;//13;
     colour_map[COLOUR_ID_NULL]->a = 255;
 
-    colour_map[COLOUR_ID_EARTH_DAY]->r = 235;//161;
-    colour_map[COLOUR_ID_EARTH_DAY]->g = 235;//125;
-    colour_map[COLOUR_ID_EARTH_DAY]->b = 235;//87;
+    colour_map[COLOUR_ID_EARTH_DAY]->r = 224;//161;
+    colour_map[COLOUR_ID_EARTH_DAY]->g = 224;//125;
+    colour_map[COLOUR_ID_EARTH_DAY]->b = 224;//87;
     colour_map[COLOUR_ID_EARTH_DAY]->a = 255;
 
     colour_map[COLOUR_ID_EARTH_NIGHT]->r = 5;
@@ -162,6 +163,15 @@ void Environment::coordsScreenToWorld(SDL_Rect* in_rect) const {
     in_rect->h = (int)ceil(w*(in_rect->h)/(double)(camera_zoom*screen_width));
 }
 
+void Environment::coordsScreenToWorld(int* in_xp, int* in_yp) const {
+    int this_x = *in_xp;
+    int this_y = *in_yp;
+    this_x = (int)(w*(this_x/*-screen_x_pos*/)/(double)(camera_zoom*screen_width)+camera_x_pos);
+    this_y = (int)(w*(this_y/*-screen_y_pos*/)/(double)(camera_zoom*screen_width)+camera_y_pos);
+    (*in_xp) = this_x;
+    (*in_yp) = this_y;
+}
+
 void Environment::coordsMouseToScreen(int* in_x, int* in_y) const {
     int this_x = (*in_x) - screen_x_pos;
     int this_y = (*in_y) - screen_y_pos;
@@ -185,7 +195,7 @@ void Environment::render() const {
             coordsWorldToScreen(&this_rect);
             if(life_grid[x][y]) {
                 Life* this_life = life_grid[x][y];
-                SDL_Color* this_colour = colour_map[this_life->colour_id];
+                SDL_Color* this_colour = &this_life->colour;
                 SDL_SetRenderDrawColor(renderer, this_colour->r, this_colour->g, this_colour->b, this_colour->a);
                 SDL_RenderFillRect(renderer,&this_rect);
             } else if(terrain_grid[x][y]) {
@@ -213,7 +223,7 @@ bool Environment::isOccupiable(int in_x, int in_y) const {
     return (!life_grid[in_x][in_y])&&terrain_grid[in_x][in_y]&&terrain_grid[in_x][in_y]->occupiable;
 }
 
-int Environment::spawnHerbivore(Gender in_gender, int in_x, int in_y) {
+int Environment::spawnLife(int in_r, int in_g, int in_b, Gender in_gender, int in_x, int in_y, int d_rgb) {
     int out = -1;
     if(isOccupiable(in_x,in_y)) {
         bool found = false;
@@ -221,15 +231,16 @@ int Environment::spawnHerbivore(Gender in_gender, int in_x, int in_y) {
             if(!(life_list[i])) {
                 found = true;
                 out = i;
-                Life_Herbivore* new_herbivore = new Life_Herbivore(in_gender);
-                new_herbivore->energy = LIFE_HERBIVORE_DEFAULT_ENERGY;
-                new_herbivore->stamina_max = LIFE_HERBIVORE_DEFAULT_STAMINA_MAX;
-                new_herbivore->stamina_max = new_herbivore->stamina_max;
-                new_herbivore->x = in_x;
-                new_herbivore->y = in_y;
-                new_herbivore->id = i;
-                life_grid[in_x][in_y] = new_herbivore;
-                life_list[i] = new_herbivore;
+                if(in_r<0) in_r = rand()%256;
+                if(in_g<0) in_g = rand()%256;
+                if(in_b<0) in_b = rand()%256;
+                Life* new_life = new Life(in_r,in_g,in_b,in_gender);
+                if(d_rgb) new_life->varyColour(d_rgb);
+                new_life->x = in_x;
+                new_life->y = in_y;
+                new_life->id = i;
+                life_grid[in_x][in_y] = new_life;
+                life_list[i] = new_life;
             }
         }
     }
@@ -297,14 +308,12 @@ void Environment::fillTerrain(TerrainType inTT, int in_w, int in_h, int in_x, in
     }
 }
 
-int Environment::spawnHerbivores(double in_P) {
+int Environment::spawnLives(double in_P,int in_r, int in_g, int in_b,Gender in_gender, int d_rgb) {
     int out = 0;
     for(int x = 0; x < w; x++) {
         for(int y = 0; y < h; y++) {
             if(Utils::rand_d()<in_P) {
-                Gender this_gender = GENDER_FEMALE;
-                if(Utils::rand_d()<0.5) this_gender = GENDER_MALE;
-                int this_ind = spawnHerbivore(this_gender,x,y);
+                int this_ind = spawnLife(in_r,in_g,in_b,in_gender,x,y,d_rgb);
                 if(this_ind!=-1) out++;
             }
         }
@@ -337,19 +346,12 @@ bool Environment::moveLife(int life_ind, int dx, int dy) {
     return out;
 }
 
-void Environment::step() {
+void Environment::step(bool once) {
     // Herbivores
-    if((period>0)&&(!(time%period))) {
+    if(once||((period>0)&&(!(time%period)))) {
         for(int i = 0; i < max_life; i++) {
             Life* this_life = life_list[i];
             if(this_life) {
-                switch(this_life->type) {
-                    case LIFE_TYPE_HERBIVORE:
-                        // Update herbivore i
-                        Life_Herbivore* this_h = static_cast<Life_Herbivore*>(life_list[i]);
-                        updateHerbivore(this_h);
-                        break;
-                }
                 updateLife(this_life);
             }
         }
@@ -358,7 +360,7 @@ void Environment::step() {
 }
 
 void Environment::updateLife(Life* in_l) {
-    // Kill life if uninhabitable
+    // Die
     if(in_l) {
         int this_x = in_l->x;
         int this_y = in_l->y;
@@ -369,42 +371,58 @@ void Environment::updateLife(Life* in_l) {
             life_list[this_id] = NULL;
         }
     }
-}
-
-void Environment::updateHerbivore(Life_Herbivore* in_h) {
-    // Try change direction
-    if(Utils::rand_d()<in_h->probability_direction_change) {
-        // Either zero or one magnitude
-        if(Utils::rand_d()<0.5) {
-            // Zero mag
-            in_h->move_direction_x = 0;
-            in_h->move_direction_y = 0;
-        } else {
-            // One mag
-            // Either Vert or Horiz non-zero component
-            if(Utils::rand_d()<0.5) {
-                //Horiz
-                //Either positive or negative
+    if(in_l) {
+        // Reproduce (initiated by male)
+        // Eat/kill
+        // Move
+        // Try change direction
+        if(in_l->can_move) {
+            if(Utils::rand_d()<in_l->probability_direction_change) {
+                // Either zero or one magnitude
                 if(Utils::rand_d()<0.5) {
-                    in_h->move_direction_x = 1;
-                    in_h->move_direction_y = 0;
+                    // Zero mag
+                    in_l->move_direction_x = 0;
+                    in_l->move_direction_y = 0;
                 } else {
-                    in_h->move_direction_x = -1;
-                    in_h->move_direction_y = 0;
-                }
-            } else {
-                //Vert
-                //Either positive or negative
-                if(Utils::rand_d()<0.5) {
-                    in_h->move_direction_x = 0;
-                    in_h->move_direction_y = 1;
-                } else {
-                    in_h->move_direction_x = 0;
-                    in_h->move_direction_y = -1;
+                    // One mag
+                    // Either Vert or Horiz non-zero component
+                    if(Utils::rand_d()<0.5) {
+                        //Horiz
+                        //Either positive or negative
+                        if(Utils::rand_d()<0.5) {
+                            in_l->move_direction_x = 1;
+                            in_l->move_direction_y = 0;
+                        } else {
+                            in_l->move_direction_x = -1;
+                            in_l->move_direction_y = 0;
+                        }
+                    } else {
+                        //Vert
+                        //Either positive or negative
+                        if(Utils::rand_d()<0.5) {
+                            in_l->move_direction_x = 0;
+                            in_l->move_direction_y = 1;
+                        } else {
+                            in_l->move_direction_x = 0;
+                            in_l->move_direction_y = -1;
+                        }
+                    }
                 }
             }
+            //Update position
+            moveLife(in_l->id,in_l->move_direction_x,in_l->move_direction_y);
+        }
+    // Recover/idle
+    // Decrement cooldowns/update do_state
+    }
+}
+
+void Environment::printLifeAt(int in_x, int in_y) const {
+    if((in_x>=0)&&(in_y>=0)&&(in_x<w)&&(in_y<h)) {
+        if(life_grid[in_x][in_y]) {
+            life_grid[in_x][in_y]->print();
+        } else {
+            cout << "No life here." << endl;
         }
     }
-    //Update position
-    moveLife(in_h->id,in_h->move_direction_x,in_h->move_direction_y);
 }

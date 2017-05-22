@@ -2,8 +2,10 @@
 #define ENVIRONMENT_OBJECT_INCLUDE
 
 #include "ColourID.h"
+#include <SDL.h>
 
 struct EnvironmentObject {
+    SDL_Colour colour;
     bool occupiable = 1;
     int x = 0;
     int y = 0;

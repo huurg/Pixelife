@@ -13,6 +13,7 @@ enum TerrainType {
 
 struct Terrain: public EnvironmentObject {
     TerrainType terrain_type = TERRAIN_TYPE_NULL;
+    void print() const;
 };
 
 #endif // TERRAIN_HEADER

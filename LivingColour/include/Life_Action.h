@@ -6,6 +6,8 @@ struct Life_Action {
     int energy_cost = 0;
     int cooldown_max = 0;
     int cooldown = 0;
+    int duration = 0;
+    int time = 0;
 };
 
 #endif // LIFE_ACTION_INCLUDE
