@@ -66,8 +66,6 @@ class Environment {
         void coordsScreenToWorld(SDL_Rect* in_rect) const;
         void coordsMouseToScreen(int* in_x, int* in_y) const;
         void moveCamera(int dx, int dy, double dz);
-
-
 };
 
 #endif // ENVIRONMENT_HEADER
