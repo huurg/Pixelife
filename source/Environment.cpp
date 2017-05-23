@@ -10,7 +10,7 @@
 #include "Life_Plant.h"
 #include "Terrain_Earth.h"
 #include "Utils.h"
-#include "GridSelector.h"
+#include "GridIterator.h"
 
 #include <iostream>
 using namespace std;
