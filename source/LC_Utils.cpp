@@ -5,7 +5,7 @@ using namespace std;
 
 #include <SDL.h>
 
-SDL_Texture* LC_Utils::LC_LoadTexture(SDL_Renderer* in_renderer, const char* in_filename, int r, int g, int b) {
+SDL_Texture* LC_Utils::LC_LoadTexture(SDL_Renderer* in_renderer, const char* in_filename, int r, int g, int b, int a) {
     SDL_Texture* out = NULL;
 
     SDL_Surface* this_surface = SDL_LoadBMP(in_filename);
@@ -15,6 +15,9 @@ SDL_Texture* LC_Utils::LC_LoadTexture(SDL_Renderer* in_renderer, const char* in_
         out = SDL_CreateTextureFromSurface(in_renderer,this_surface);
         if(!out) {
             cout << SDL_GetError() << endl;
+        } else {
+            SDL_SetTextureBlendMode(out,SDL_BLENDMODE_BLEND);
+            SDL_SetTextureAlphaMod(out,(Uint8)a);
         }
         SDL_FreeSurface(this_surface);
     } else {
