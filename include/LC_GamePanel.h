@@ -79,6 +79,9 @@ public:
 
     void addGamePanel(LC_GamePanel* in_gamepanel);
     void addButton(LC_Button* in_button);
+
+    int getN_GamePanels() const;
+    int getN_Buttons() const;
 };
 
 #endif // LC_GAMEPANEL_HEADER

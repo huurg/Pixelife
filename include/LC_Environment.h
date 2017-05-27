@@ -15,6 +15,8 @@ using namespace std;
 #include "Life_Herbivore.h"
 #include "Life_Plant.h"
 #include "Life_Tree.h"
+#include "LC_ToolState.h"
+#include "LC_DiamondIterator.h"
 
 class LC_Environment : public LC_GamePanel {
     public:
@@ -38,6 +40,9 @@ class LC_Environment : public LC_GamePanel {
         Terrain** terrain_list = NULL;
         int* terrain_id_list = NULL;
         int n_terrain_id = 0;
+        LC_DiamondIterator dia;
+
+        double sun_efficiency = 1.0;
     public:
         LC_Environment(int in_w, int in_h);
         ~LC_Environment();
@@ -46,8 +51,12 @@ class LC_Environment : public LC_GamePanel {
         bool moveLife(int life_ind, int dx, int dy);
         bool setLifePos(int life_ind, int in_x, int in_y);
         int spawnLife(int in_r = -1, int in_g = -1, int in_b = -1, Gender in_gender = GENDER_NULL, int in_x = 0, int in_y = 0, int d_rgb = 0); //Change to spawnLife
+
+        int spawnLife(int in_r, int in_g, int in_b, int in_x, int in_y); //Change to spawnLife
         int spawnTerrain(int in_r, int in_g, int in_b, int in_x, int in_y); //Change to spawnLife
         void eraseLife(int ix, int iy);
+        void eraseTerrain(int ix, int iy);
+        void act(LC_ToolState* tool_state);
 
         int spawnLives(double in_P,int in_r = -1, int in_g = -1, int in_b = -1, Gender in_gender = GENDER_NULL, int d_rgb = 0); //Change to spawn lives
         void printLifeAt(int in_x, int in_y) const;
@@ -56,6 +65,9 @@ class LC_Environment : public LC_GamePanel {
         void fillTerrain(int r, int g, int b, int in_w, int in_h, int in_x, int in_y);
 
         bool isOccupiable(int in_x, int in_y) const;
+        Life* canEat(int i);//Checks if life at id i can eat anything in its neighbour hood. Outputs the life to be eaten if yes or NULL if none.
+        Life* canMate(int i);
+        Life* canPollenate(int i);
         LifeType lifeTypeAt(int in_x, int in_y) const;
         TerrainType terrainTypeAt(int in_x, int in_y) const;
 

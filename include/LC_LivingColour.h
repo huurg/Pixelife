@@ -13,7 +13,7 @@ using namespace std;
 
 const int LC_INIT_SCREEN_WIDTH = 1920;
 const int LC_INIT_SCREEN_HEIGHT = 1080;
-const double LC_INIT_ENVIRONMENT_SCALE = 4.0;
+const double LC_INIT_ENVIRONMENT_SCALE = 10.0;
 const bool LC_INIT_FULL_SCREEN = 1;
 
 class LC_LivingColour : public LC_GamePanel {
@@ -25,6 +25,7 @@ class LC_LivingColour : public LC_GamePanel {
         bool left_mouse_down = 0;
         int left_mouse_down_x = 0;
         int left_mouse_down_y = 0;
+        SDL_Color* menu_bg_color = NULL;
     public:
         // Properties
             // Tool state
@@ -64,6 +65,7 @@ class LC_LivingColour : public LC_GamePanel {
 };
 
 extern LC_LivingColour* LC_living_colour;
+extern int LC_lives_born;
 
 void LC_StartGame();
 int LC_GetScreenWidth();
@@ -80,5 +82,35 @@ void LC_SelectTool3();
 void LC_SelectTool4();
 void LC_IncrementPeriod();
 void LC_DecrementPeriod();
+
+void LC_setToolTypeSelect();
+void LC_setToolTypeCreate();
+void LC_setToolTypeErase();
+void LC_setToolTargetLife();
+void LC_setToolTargetTerrain();
+void LC_setToolOperationDraw();
+void LC_setToolOperationFill();
+void LC_setToolOperationSpray();
+void LC_setToolShapeRect();
+void LC_setToolShapeCircle();
+
+void LC_IncrementR();
+void LC_IncrementG();
+void LC_IncrementB();
+void LC_DecrementR();
+void LC_DecrementG();
+void LC_DecrementB();
+void LC_SetR();
+void LC_SetG();
+void LC_SetB();
+void LC_SetM();
+void LC_SetC();
+void LC_SetY();
+void LC_SetK();
+void LC_SetW();
+void LC_SetH();
+
+void LC_IncrementBrushSize();
+void LC_DecrementBrushSize();
 
 #endif // LC_LIVING_COLOUR_HEADER

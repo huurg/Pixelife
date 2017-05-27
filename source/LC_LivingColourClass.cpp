@@ -15,6 +15,7 @@ using namespace std;
 LC_LivingColour::LC_LivingColour() : LC_GamePanel() {
     screen_width = LC_INIT_SCREEN_WIDTH;
     screen_height = LC_INIT_SCREEN_HEIGHT;
+    world_width = screen_width;
     full_screen = LC_INIT_FULL_SCREEN;
 }
 
@@ -46,8 +47,10 @@ void LC_LivingColour::init() {
 
                     // Create menu bar
                     menu_bar = new LC_MenuBar();
-                    menu_bar->setRenderer(renderer);
+                    menu_bar->setParent(this);
                     menu_bar->init();
+                    menu_bg_color = menu_bar->bg_colour;
+                    //cout << "Menu gamepanels = " << menu_bar->getN_GamePanels() << endl;
 
                     // Create environment
                     environment = new LC_Environment(screen_width/LC_INIT_ENVIRONMENT_SCALE,screen_height/LC_INIT_ENVIRONMENT_SCALE);
@@ -58,13 +61,21 @@ void LC_LivingColour::init() {
 
                     int this_w = environment->getWidth();
                     int this_h = environment->getHeight();
-                    cout << "env dims = " << this_w << " x " << this_h << endl;
+                    //cout << "env dims = " << this_w << " x " << this_h << endl;
                     environment->refreshIDList();
+                    tool_state.rect.env_w = tool_state.circle.env_w = tool_state.diamond.env_w = tool_state.line.env_w = this_w;
+                    tool_state.rect.env_h = tool_state.circle.env_h = tool_state.diamond.env_h = tool_state.line.env_h = this_h;
                     //environment->fillTerrain(255,255,255,this_w/2,this_h/2,this_w/4,this_h/4);
                     //environment->spawnLives(0.1);
 
                     addGamePanel(environment);
                     addGamePanel(menu_bar);
+
+                    LC_setToolTypeSelect();
+                    LC_setToolTargetLife();
+                    LC_setToolOperationDraw();
+                    LC_setToolShapeRect();
+                    LC_SetW();
                 } else {
                     cout << SDL_GetError() << endl;
                 }
@@ -137,6 +148,39 @@ void LC_LivingColour::keyUpdate(SDL_Event* event) {
             case SDL_SCANCODE_ESCAPE:
                 exit = true;
                 break;
+            case SDL_SCANCODE_LEFTBRACKET:
+                tool_state.brush_size--;
+                if(tool_state.brush_size<0) tool_state.brush_size = 0;
+                tool_state.circle.circle_r_x = tool_state.brush_size;
+                tool_state.circle.circle_r_y = tool_state.brush_size;
+                tool_state.rect.rect_w = tool_state.brush_size;
+                tool_state.rect.rect_h = tool_state.brush_size;
+                break;
+            case SDL_SCANCODE_RIGHTBRACKET:
+                tool_state.brush_size++;
+                tool_state.circle.circle_r_x = tool_state.brush_size;
+                tool_state.circle.circle_r_y = tool_state.brush_size;
+                tool_state.rect.rect_w = tool_state.brush_size;
+                tool_state.rect.rect_h = tool_state.brush_size;
+                break;
+            case SDL_SCANCODE_Q:
+                if(tool_state.colour.r<255) tool_state.colour.r++;
+                break;
+            case SDL_SCANCODE_W:
+                if(tool_state.colour.g<255) tool_state.colour.g++;
+                break;
+            case SDL_SCANCODE_E:
+                if(tool_state.colour.b<255) tool_state.colour.b++;
+                break;
+            case SDL_SCANCODE_A:
+                if(tool_state.colour.r>0) tool_state.colour.r--;
+                break;
+            case SDL_SCANCODE_S:
+                if(tool_state.colour.g>0) tool_state.colour.g--;
+                break;
+            case SDL_SCANCODE_D:
+                if(tool_state.colour.b>0) tool_state.colour.b--;
+                break;
             default:
                 break;
         }
@@ -147,59 +191,219 @@ void LC_LivingColour::keyUpdate(SDL_Event* event) {
 bool LC_LivingColour::mouseUpdate(SDL_Event* event) {
     switch(event->type) {
         case SDL_MOUSEMOTION:
-            if(left_mouse_down) {
+            // Update tools
+            // Rect
+            if(tool_state.rect.centred) {
+                tool_state.rect.rect_x = event->motion.x;
+                tool_state.rect.rect_y = event->motion.y;
+                tool_state.rect.rect_w = tool_state.brush_size;
+                tool_state.rect.rect_h = tool_state.brush_size;
+            } else {
                 if(event->motion.x<left_mouse_down_x) {
-                    tool_state.rect.x = event->motion.x;
+                    tool_state.rect.rect_x = event->motion.x;
                 } else {
-                    tool_state.rect.x = left_mouse_down_x;
+                    tool_state.rect.rect_x = left_mouse_down_x;
                 }
                 if(event->motion.y<left_mouse_down_y) {
-                    tool_state.rect.y = event->motion.y;
+                    tool_state.rect.rect_y = event->motion.y;
                 } else {
-                    tool_state.rect.y = left_mouse_down_y;
+                    tool_state.rect.rect_y = left_mouse_down_y;
                 }
-                tool_state.rect.w = fabs(event->motion.x - left_mouse_down_x);
-                tool_state.rect.h = fabs(event->motion.y - left_mouse_down_y);
+                tool_state.rect.rect_w = fabs(event->motion.x - left_mouse_down_x);
+                tool_state.rect.rect_h = fabs(event->motion.y - left_mouse_down_y);
+            }
+            // Circle
+            if(tool_state.circle.centred) {
+                tool_state.circle.circle_x = event->motion.x;
+                tool_state.circle.circle_y = event->motion.y;
+                tool_state.circle.circle_r_x = tool_state.brush_size;
+                tool_state.circle.circle_r_y = tool_state.brush_size;
+            } else {
+                if(event->motion.x<left_mouse_down_x) {
+                    tool_state.circle.circle_x = event->motion.x;
+                } else {
+                    tool_state.circle.circle_x = left_mouse_down_x;
+                }
+                if(event->motion.y<left_mouse_down_y) {
+                    tool_state.circle.circle_y = event->motion.y;
+                } else {
+                    tool_state.circle.circle_y = left_mouse_down_y;
+                }
+                tool_state.circle.circle_r_x = fabs(event->motion.x - left_mouse_down_x)/2.0;
+                tool_state.circle.circle_r_y = fabs(event->motion.y - left_mouse_down_y)/2.0;
+            }
+            // Spawn life if mouse is down and operation is draw
+            if(LC_isLeftMouseDown()&&((tool_state.operation==LC_TOOL_OPERATION_DRAW)||(tool_state.operation==LC_TOOL_OPERATION_SPRAY))) {
+                int r_x, r_y, r_w, r_h;
+
+                r_x = tool_state.rect.rect_x;
+                r_y = tool_state.rect.rect_y;
+                r_w = tool_state.rect.rect_w;
+                r_h = tool_state.rect.rect_h;
+
+                environment->coordsMouseToScreen(&tool_state.rect.rect_x,&tool_state.rect.rect_y,&tool_state.rect.rect_w,&tool_state.rect.rect_h);
+                environment->coordsScreenToWorld(&tool_state.rect.rect_x,&tool_state.rect.rect_y,&tool_state.rect.rect_w,&tool_state.rect.rect_h);
+
+                int c_x, c_y, c_w, c_h;
+
+                c_x = tool_state.circle.circle_x;
+                c_y = tool_state.circle.circle_y;
+                c_w = tool_state.circle.circle_r_x;
+                c_h = tool_state.circle.circle_r_y;
+
+                environment->coordsMouseToScreen(&tool_state.circle.circle_x,&tool_state.circle.circle_y,&tool_state.circle.circle_r_x,&tool_state.circle.circle_r_y);
+                environment->coordsScreenToWorld(&tool_state.circle.circle_x,&tool_state.circle.circle_y,&tool_state.circle.circle_r_x,&tool_state.circle.circle_r_y);
+
+                if(tool_state.operation==LC_TOOL_OPERATION_FILL) {
+                    if(environment->isMouseOver()) environment->act(&tool_state);
+                }
+
+                if(environment->isMouseOver()) environment->act(&tool_state);
+
+                tool_state.rect.rect_x = r_x;
+                tool_state.rect.rect_y = r_y;
+                tool_state.rect.rect_w = r_w;
+                tool_state.rect.rect_h = r_h;
+                tool_state.circle.circle_x = c_x;
+                tool_state.circle.circle_y = c_y;
+                tool_state.circle.circle_r_x = c_w;
+                tool_state.circle.circle_r_y = c_h;
             }
             break;
         case SDL_MOUSEBUTTONDOWN:
             if(event->button.button == SDL_BUTTON_LEFT) {
                 left_mouse_down = 1;
-                left_mouse_down_x = event->motion.x;
-                left_mouse_down_y = event->motion.y;
-                tool_state.rect.x = left_mouse_down_x;
-                tool_state.rect.y = left_mouse_down_y;
+                left_mouse_down_x = event->button.x;
+                left_mouse_down_y = event->button.y;
+                // Update tools
+                // Rect
+                if(tool_state.rect.centred) {
+                    tool_state.rect.rect_x = event->button.x;
+                    tool_state.rect.rect_y = event->button.y;
+                    tool_state.rect.rect_w = tool_state.brush_size;
+                    tool_state.rect.rect_h = tool_state.brush_size;
+                } else {
+                    tool_state.rect.rect_x = left_mouse_down_x;
+                    tool_state.rect.rect_y = left_mouse_down_y;
+                    tool_state.rect.rect_w = 0;
+                    tool_state.rect.rect_h = 0;
+                }
+                // Circle
+                if(tool_state.circle.centred) {
+                    tool_state.circle.circle_x = event->button.x;
+                    tool_state.circle.circle_y = event->button.y;
+                    tool_state.circle.circle_r_x = tool_state.brush_size;
+                    tool_state.circle.circle_r_y = tool_state.brush_size;
+                } else {
+                    tool_state.circle.circle_x = event->button.x;
+                    tool_state.circle.circle_y = event->button.y;
+                    tool_state.circle.circle_r_x = 0;
+                    tool_state.circle.circle_r_y = 0;
+                }
+            }
+
+            // Print life at mouse position of type is select
+            if(tool_state.type==LC_TOOL_TYPE_SELECT) {
+                int this_mx = left_mouse_down_x;
+                int this_my = left_mouse_down_y;
+                int this_w = 0;
+                int this_h = 0;
+                environment->coordsMouseToScreen(&this_mx, &this_my,&this_w,&this_h);
+                environment->coordsScreenToWorld(&this_mx, &this_my,&this_w,&this_h);
+                //cout << this_mx << ", " << this_my << endl;
+                environment->printLifeAt(this_mx,this_my);
+
+            }
+
+            // Spawn life if operation is draw
+            if((tool_state.operation==LC_TOOL_OPERATION_DRAW)||(tool_state.operation==LC_TOOL_OPERATION_SPRAY)) {
+                int r_x, r_y, r_w, r_h;
+
+                r_x = tool_state.rect.rect_x;
+                r_y = tool_state.rect.rect_y;
+                r_w = tool_state.rect.rect_w;
+                r_h = tool_state.rect.rect_h;
+
+                environment->coordsMouseToScreen(&tool_state.rect.rect_x,&tool_state.rect.rect_y,&tool_state.rect.rect_w,&tool_state.rect.rect_h);
+                environment->coordsScreenToWorld(&tool_state.rect.rect_x,&tool_state.rect.rect_y,&tool_state.rect.rect_w,&tool_state.rect.rect_h);
+
+                int c_x, c_y, c_w, c_h;
+
+                c_x = tool_state.circle.circle_x;
+                c_y = tool_state.circle.circle_y;
+                c_w = tool_state.circle.circle_r_x;
+                c_h = tool_state.circle.circle_r_y;
+
+                environment->coordsMouseToScreen(&tool_state.circle.circle_x,&tool_state.circle.circle_y,&tool_state.circle.circle_r_x,&tool_state.circle.circle_r_y);
+                environment->coordsScreenToWorld(&tool_state.circle.circle_x,&tool_state.circle.circle_y,&tool_state.circle.circle_r_x,&tool_state.circle.circle_r_y);
+
+                if(tool_state.operation==LC_TOOL_OPERATION_FILL) {
+                    if(environment->isMouseOver()) environment->act(&tool_state);
+                }
+
+                if(environment->isMouseOver()) environment->act(&tool_state);
+
+                tool_state.rect.rect_x = r_x;
+                tool_state.rect.rect_y = r_y;
+                tool_state.rect.rect_w = r_w;
+                tool_state.rect.rect_h = r_h;
+                tool_state.circle.circle_x = c_x;
+                tool_state.circle.circle_y = c_y;
+                tool_state.circle.circle_r_x = c_w;
+                tool_state.circle.circle_r_y = c_h;
             }
             break;
         case SDL_MOUSEBUTTONUP:
             if(event->button.button == SDL_BUTTON_LEFT) {
                 left_mouse_down = 0;
-                if(event->button.x<left_mouse_down_x) {
-                    tool_state.rect.x = event->button.x;
+                /*if(event->button.x<left_mouse_down_x) {
+                    tool_state.rect.rect_x = event->button.x;
                 } else {
-                    tool_state.rect.x = left_mouse_down_x;
+                    tool_state.rect.rect_x = left_mouse_down_x;
                 }
                 if(event->button.y<left_mouse_down_y) {
-                    tool_state.rect.y = event->button.y;
+                    tool_state.rect.rect_y = event->button.y;
                 } else {
-                    tool_state.rect.y = left_mouse_down_y;
+                    tool_state.rect.rect_y = left_mouse_down_y;
                 }
-                tool_state.rect.w = fabs(event->button.x - left_mouse_down_x);
-                tool_state.rect.h = fabs(event->button.y - left_mouse_down_y);
+                tool_state.rect.rect_w = fabs(event->button.x - left_mouse_down_x);
+                tool_state.rect.rect_h = fabs(event->button.y - left_mouse_down_y);*/
 
                 // Do something
-                environment->coordsMouseToScreen(&tool_state.rect.x,&tool_state.rect.y,&tool_state.rect.w,&tool_state.rect.h);
-                double this_x = tool_state.rect.x;
-                double this_y = tool_state.rect.y;
-                double this_w = tool_state.rect.w;
-                double this_h = tool_state.rect.h;
-                environment->coordsScreenToWorld(&this_x,&this_y,&this_w,&this_h);
-                this_x = round(this_x);
-                this_y = round(this_y);
-                this_w = round(this_w);
-                this_h = round(this_h);
+                int r_x, r_y, r_w, r_h;
 
-                switch(tool_state.type) {
+                r_x = tool_state.rect.rect_x;
+                r_y = tool_state.rect.rect_y;
+                r_w = tool_state.rect.rect_w;
+                r_h = tool_state.rect.rect_h;
+
+                environment->coordsMouseToScreen(&tool_state.rect.rect_x,&tool_state.rect.rect_y,&tool_state.rect.rect_w,&tool_state.rect.rect_h);
+                environment->coordsScreenToWorld(&tool_state.rect.rect_x,&tool_state.rect.rect_y,&tool_state.rect.rect_w,&tool_state.rect.rect_h);
+
+                int c_x, c_y, c_w, c_h;
+
+                c_x = tool_state.circle.circle_x;
+                c_y = tool_state.circle.circle_y;
+                c_w = tool_state.circle.circle_r_x;
+                c_h = tool_state.circle.circle_r_y;
+
+                environment->coordsMouseToScreen(&tool_state.circle.circle_x,&tool_state.circle.circle_y,&tool_state.circle.circle_r_x,&tool_state.circle.circle_r_y);
+                environment->coordsScreenToWorld(&tool_state.circle.circle_x,&tool_state.circle.circle_y,&tool_state.circle.circle_r_x,&tool_state.circle.circle_r_y);
+
+                if(tool_state.operation==LC_TOOL_OPERATION_FILL) {
+                    if(environment->isMouseOver()) environment->act(&tool_state);
+                }
+
+                tool_state.rect.rect_x = r_x;
+                tool_state.rect.rect_y = r_y;
+                tool_state.rect.rect_w = r_w;
+                tool_state.rect.rect_h = r_h;
+                tool_state.circle.circle_x = c_x;
+                tool_state.circle.circle_y = c_y;
+                tool_state.circle.circle_r_x = c_w;
+                tool_state.circle.circle_r_y = c_h;
+
+                /*switch(tool_state.type) {
                     case LC_TOOL_TYPE_CREATE:
                         {
                             switch(tool_state.target) {
@@ -211,8 +415,8 @@ bool LC_LivingColour::mouseUpdate(SDL_Event* event) {
                                                     switch(tool_state.operation) {
                                                         case LC_TOOL_OPERATION_FILL:
                                                             {
-                                                                for(int i = this_x; i < (this_x+this_w); i++) {
-                                                                    for(int j = this_y; j < (this_y+this_h); j++) {
+                                                                for(int i = tool_state.rect.rect_x; i < (tool_state.rect.rect_x+tool_state.rect.rect_w); i++) {
+                                                                    for(int j = tool_state.rect.rect_y; j < (tool_state.rect.rect_y+tool_state.rect.rect_h); j++) {
                                                                         environment->spawnLife(tool_state.colour.r,tool_state.colour.g,tool_state.colour.b,GENDER_NULL,i, j);
                                                                     }
                                                                 }
@@ -222,6 +426,7 @@ bool LC_LivingColour::mouseUpdate(SDL_Event* event) {
                                                     }
                                                 }
                                                 break;
+
                                         }
                                     }
                                     break;
@@ -233,8 +438,8 @@ bool LC_LivingColour::mouseUpdate(SDL_Event* event) {
                                                     switch(tool_state.operation) {
                                                         case LC_TOOL_OPERATION_FILL:
                                                             {
-                                                                for(int i = this_x; i < (this_x+this_w); i++) {
-                                                                    for(int j = this_y; j < (this_y+this_h); j++) {
+                                                                for(int i = tool_state.rect.rect_x; i < (tool_state.rect.rect_x+tool_state.rect.rect_w); i++) {
+                                                                    for(int j = tool_state.rect.rect_y; j < (tool_state.rect.rect_y+tool_state.rect.rect_h); j++) {
                                                                         environment->spawnTerrain(tool_state.colour.r,tool_state.colour.g,tool_state.colour.b,i, j);
                                                                     }
                                                                 }
@@ -261,8 +466,8 @@ bool LC_LivingColour::mouseUpdate(SDL_Event* event) {
                                                     switch(tool_state.operation) {
                                                         case LC_TOOL_OPERATION_FILL:
                                                             {
-                                                                for(int i = this_x; i < (this_x+this_w); i++) {
-                                                                    for(int j = this_y; j < (this_y+this_h); j++) {
+                                                                for(int i = tool_state.rect.rect_x; i < (tool_state.rect.rect_x+tool_state.rect.rect_x); i++) {
+                                                                    for(int j = tool_state.rect.rect_y; j < (tool_state.rect.rect_y+tool_state.rect.rect_h); j++) {
                                                                         environment->eraseLife(i,j);
                                                                     }
                                                                 }
@@ -283,8 +488,8 @@ bool LC_LivingColour::mouseUpdate(SDL_Event* event) {
                                                     switch(tool_state.operation) {
                                                         case LC_TOOL_OPERATION_FILL:
                                                             {
-                                                                for(int i = this_x; i < (this_x+this_w); i++) {
-                                                                    for(int j = this_y; j < (this_y+this_h); j++) {
+                                                                for(int i = tool_state.rect.rect_x; i < (tool_state.rect.rect_x+tool_state.rect.rect_w); i++) {
+                                                                    for(int j = tool_state.rect.rect_y; j < (tool_state.rect.rect_y+tool_state.rect.rect_h); j++) {
                                                                         environment->eraseLife(i,j);
                                                                         environment->spawnTerrain(-1,-1,-1,i, j);
                                                                     }
@@ -302,13 +507,13 @@ bool LC_LivingColour::mouseUpdate(SDL_Event* event) {
                             }
                         }
                         break;
-                }
+                }*/
                 //environment->fillTerrain(tool_state.colour.r,tool_state.colour.g,tool_state.colour.b,this_w,this_h,this_x,this_y);
 
-                tool_state.rect.x = 0;
-                tool_state.rect.y = 0;
-                tool_state.rect.w = 0;
-                tool_state.rect.h = 0;
+                tool_state.rect.rect_x = 0;
+                tool_state.rect.rect_y = 0;
+                tool_state.rect.rect_w = 0;
+                tool_state.rect.rect_h = 0;
             }
             break;
     }
@@ -323,20 +528,90 @@ void LC_LivingColour::render() {
     SDL_SetRenderDrawColor(renderer,0,0,0,255);
     SDL_RenderClear(renderer);
 
+    if(menu_bg_color) {
+        menu_bg_color->r = tool_state.colour.r;
+        menu_bg_color->g = tool_state.colour.g;
+        menu_bg_color->b = tool_state.colour.b;
+        menu_bg_color->a = tool_state.colour.a;
+    }
+
     LC_GamePanel::render();
 
     // Render tool
-    switch(tool_state.shape) {
-        case LC_TOOL_SHAPE_RECT:
-            if(left_mouse_down) {
-                //cout << "x y w h = " << tool_state.rect.x << " " << tool_state.rect.y << " " << tool_state.rect.w << " " << tool_state.rect.h << " " << endl;
-                SDL_SetRenderDrawColor(renderer,255,0,0,255);
-                SDL_RenderDrawRect(renderer,&tool_state.rect);
-            }
-            break;
+    if(tool_state.type!=LC_TOOL_TYPE_SELECT) {
+        switch(tool_state.operation) {
+            case LC_TOOL_OPERATION_FILL:
+                switch(tool_state.shape) {
+                    case LC_TOOL_SHAPE_RECT:
+                        if(left_mouse_down) {
+                            //cout << "x y w h = " << tool_state.rect.x << " " << tool_state.rect.y << " " << tool_state.rect.w << " " << tool_state.rect.h << " " << endl;
+                            SDL_SetRenderDrawColor(renderer,255,0,0,255);
+                            SDL_Rect this_rect;
+                            this_rect.x = tool_state.rect.rect_x;
+                            this_rect.y = tool_state.rect.rect_y;
+                            this_rect.w = tool_state.rect.rect_w;
+                            this_rect.h = tool_state.rect.rect_h;
+                            SDL_RenderDrawRect(renderer,&this_rect);
+                        }
+                        break;
+                    case LC_TOOL_SHAPE_CIRCLE:
+                        if(left_mouse_down) {
+                            SDL_SetRenderDrawColor(renderer,255,0,0,255);
+                            tool_state.circle.line = 1;
+                            tool_state.circle.env_w = screen_width;
+                            tool_state.circle.env_h = screen_height;
+                            for(int i = 0; i < tool_state.circle.getN(); i++) {
+                                bool b;
+                                int this_x, this_y;
+                                b = tool_state.circle.iToXY(i,&this_x, &this_y);
+                                if(b) {
+                                    SDL_RenderDrawPoint(renderer,this_x,this_y);
+                                }
+                            }
+                            tool_state.circle.line = 0;
+                            tool_state.circle.env_w = environment->getWidth();
+                            tool_state.circle.env_h = environment->getHeight();
+                        }
+                        break;
+                }
+                break;
+            case LC_TOOL_OPERATION_DRAW:
+            case LC_TOOL_OPERATION_SPRAY:
+                switch(tool_state.shape) {
+                    case LC_TOOL_SHAPE_CIRCLE:
+                        {
+                            SDL_SetRenderDrawColor(renderer,255,0,0,255);
+                            tool_state.circle.line = 1;
+                            tool_state.circle.env_w = screen_width;
+                            tool_state.circle.env_h = screen_height;
+                            for(int i = 0; i < tool_state.circle.getN(); i++) {
+                                bool b;
+                                int this_x, this_y;
+                                b = tool_state.circle.iToXY(i,&this_x, &this_y);
+                                if(b) {
+                                    SDL_RenderDrawPoint(renderer,this_x,this_y);
+                                }
+                            }
+                            tool_state.circle.line = 0;
+                            tool_state.circle.env_w = environment->getWidth();
+                            tool_state.circle.env_h = environment->getHeight();
+                        }
+                        break;
+                    case LC_TOOL_SHAPE_RECT:
+                        {
+                            SDL_SetRenderDrawColor(renderer,255,0,0,255);
+                            SDL_Rect this_rect;
+                            this_rect.x = tool_state.rect.rect_x-tool_state.rect.rect_w/2;
+                            this_rect.y = tool_state.rect.rect_y-tool_state.rect.rect_h/2;
+                            this_rect.w = tool_state.rect.rect_w;
+                            this_rect.h = tool_state.rect.rect_h;
+                            SDL_RenderDrawRect(renderer,&this_rect);
+                        }
+                        break;
+                }
+                break;
+        }
     }
-
-
     SDL_RenderPresent(renderer);
 }
 

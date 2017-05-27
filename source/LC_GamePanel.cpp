@@ -352,6 +352,11 @@ void LC_GamePanel::render() {
         bg_rect.w = screen_width;
         bg_rect.h = screen_height;
 
+        /*if(parent) {
+            parent->coordsWorldToScreen(&viewport_rect.x,&viewport_rect.y,&viewport_rect.w,&viewport_rect.h);
+            parent->coordsWorldToScreen(&bg_rect.x,&bg_rect.y,&bg_rect.w,&bg_rect.h);
+        }*/
+
         SDL_RenderSetViewport(renderer,&viewport_rect);
         // Render background colour
         if(LC_GamePanel::bg_colour) {
@@ -532,6 +537,7 @@ void LC_GamePanel::addGamePanel(LC_GamePanel* in_gamepanel) {
         gamepanels[n_gamepanels] = in_gamepanel;
         render_objects[n_render_objects] = in_gamepanel;
         in_gamepanel->setRenderer(renderer);
+        in_gamepanel->setParent(this);
         n_render_objects++;
         n_gamepanels++;
     }
@@ -556,3 +562,11 @@ void LC_GamePanel::coordsScreenToWorld(int* ox, int* oy, int* ow, int* oh) const
     *oh = ohd;
 }
 */
+
+int LC_GamePanel::getN_Buttons() const {
+    return n_buttons;
+}
+
+int LC_GamePanel::getN_GamePanels() const {
+    return n_gamepanels;
+}
