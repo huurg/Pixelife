@@ -23,9 +23,9 @@ void Life::setColour(int in_r, int in_g, int in_b) {
     can_eat_herbivores = v_r;
     can_eat_sun = v_g;
     can_eat_plants = v_b;
-    can_die = v_r||v_g||v_b;
+    can_die = (v_r||v_g||v_b)&&!(v_r&&v_g&&v_b);
     can_move = (!(v_r&&v_g&&v_b))&&((!v_g)||(v_g&&((v_r&&(w_r>w_g)))||(v_b&&(w_b>w_g))));
-    can_reproduce_sexually = v_r||v_b;//(!(!v_r)&&(!v_g)&&(!v_b))&&can_move;
+    can_reproduce_sexually = (v_r||v_b)&&(!v_g);
     can_reproduce_asexually = (!(v_r&&v_g&&v_b))&&(!can_move);
     can_be_eaten_alive = v_g;
     RGBToChromenome(&in_r, &in_g, &in_b, chromenome);
@@ -73,10 +73,12 @@ Life::~Life() {
 
 void Life::print() const {
     cout << "Life object." << endl;
+    cout << "\tCan die = " << can_die << endl;
     cout << "\tposition = (" << x << ", " << y << ")" << endl;
     cout << "\tgender = ";
     if(gender==GENDER_FEMALE) cout << "female" << endl;
     if(gender==GENDER_MALE) cout << "male" << endl;
+    cout << "\tage = " << age << endl;
     cout << "\trgb = ("  << (int)colour.r << ", " << (int)colour.g << ", " << (int)colour.b << ")" << endl;
     cout << "\tv = (" << v_r << ", " << v_g << ", " << v_b << ")" << endl;
     cout << "\tw = (" << w_r << ", " << w_g << ", " << w_b << ")" << endl;
@@ -170,6 +172,20 @@ double Life::eatProbability(const Life* lifeA, const Life* lifeB) {
         out = 0.0;
     } else {
         out = 0.5*((E_AB-E_BA)/(E_AB+E_BA)+1.0);
+
+        if(lifeA->can_eat_herbivores&&lifeB->alive&&!lifeB->can_be_eaten_alive) {
+            if((lifeA->stamina/lifeA->stamina_max>0.0)||(lifeB->stamina/lifeB->stamina_max>0.0)) {
+                out *= 0.5*((lifeA->stamina/lifeA->stamina_max-lifeB->stamina/lifeB->stamina_max)/(lifeA->stamina/lifeA->stamina_max+lifeB->stamina/lifeB->stamina_max)+1.0);
+                if((lifeA->energy>0.0)||(lifeB->energy>0.0)) {
+                    out *= 0.5*((lifeA->energy-lifeB->energy)/(lifeA->energy+lifeB->energy)+1.0);
+                } else {
+                    out = 0.0;
+                }
+            } else {
+                out = 0.0;
+            }
+        }
+
     }
 
 
@@ -182,23 +198,40 @@ void Life::setDefaultParameters() {
     idle.cooldown_max = 1;
     idle.duration = 1;
     idle.energy_cost = 0.1;
-    idle.stamina_cost = -0.1;
+    idle.stamina_cost = 0.1;
+    resume_probability = 1.0;
 
-    rest.cooldown_max = 2*(int)stamina_max;
-    rest.duration = 2*(int)stamina_max;
+    rest.cooldown_max = (int)stamina_max;
+    rest.duration = (int)stamina_max;
     rest.energy_cost = 0.01;
     rest.stamina_cost = -(int)stamina_max;
 
     eat.cooldown_max = 30;
     eat.duration = 30;
-    eat.energy_cost = -30;
+    eat.energy_cost = -100;
     eat.stamina_cost = 10;
 
-    if(can_eat_sun) {
-        eat.energy_cost = -3.3;
+    probability_ignore_food = 0.5;
+    if(can_eat_herbivores) {
+        probability_ignore_food = 0.001;
+        eat.cooldown_max = 2000 ;
+        eat.energy_cost = -500;
+        eat.duration = 50;
+        if(can_eat_plants) {
+            eat.energy_cost = -250;
+        }
+        if(can_eat_sun) {
+            eat.energy_cost = -100;
+        }
     }
 
-    probability_ignore_food = 0.5;
+    if(can_eat_sun&&!(can_eat_herbivores)) {
+        eat.cooldown_max = 1;
+        eat.duration = 1;
+        eat.energy_cost = -2;
+        eat.stamina_cost = 0.1;
+        eat.background = 1;
+    }
 
     decay.cooldown_max = 1;
     decay.duration = 1;
@@ -208,7 +241,7 @@ void Life::setDefaultParameters() {
     speed = 0;
     line_of_sight = 5;
 
-    walk.cooldown_max = 10;
+    walk.cooldown_max = 1;//10; Switch back to this after run implemented
     walk.duration = 1;
     walk.energy_cost = 1;
     walk.stamina_cost = 1;
@@ -218,51 +251,64 @@ void Life::setDefaultParameters() {
     run.energy_cost = 10;
     run.stamina_cost = 10;
 
-    probability_direction_change = 0.15;
-    probability_idle = 0.5;
+    probability_direction_change = 0.4;
+    probability_idle = 0.2;
     probability_notice_prey = 0.6;
     probability_notice_pred = 0.8;
 
-    mate.cooldown_max = 300;
-    mate.duration = 300;
-    mate.energy_cost = 0;//100;
-    mate.stamina_cost = 0;//100;
+    if(can_eat_herbivores) {
+        probability_direction_change = 0.05;
+        probability_idle = 0.8;
+    }
+
+    if(!(v_r||v_g||v_b)) {
+        probability_direction_change = 0.15;
+        probability_idle = 0.0;
+        rest.duration = 1;
+    }
+
+
+    mate.cooldown_max = 30;
+    mate.duration = 30;
+    mate.energy_cost = 5;//100;
+    mate.stamina_cost = 5;//100;
 
     gestate.cooldown_max = 300;
-    gestate.duration = 300;
-    gestate.energy_cost = 0;//100;
-    gestate.stamina_cost = 0;//100;
+    gestate.duration = 900;
+    gestate.energy_cost = 300;//100;
+    gestate.stamina_cost = 30;//100;
+    gestate.background = 1;
 
     birth.cooldown_max = 300;
-    birth.duration = 200;
-    birth.energy_cost = 0;//50;
-    birth.stamina_cost = 0;//50;
+    birth.duration = 100;
+    birth.energy_cost = 20;//50;
+    birth.stamina_cost = 10;//50;
     mating_constant = 1.0;
     birth_energy = 100;
 
     flower.cooldown_max = 300;
     flower.duration = 300;
-    flower.energy_cost = 0;//100;
-    flower.stamina_cost = 0;//100;
+    flower.energy_cost = 40;//100;
+    flower.stamina_cost = 40;//100;
 
     grow_seed.cooldown_max = 300;
     grow_seed.duration = 300;
-    grow_seed.energy_cost = 0;//500;
-    grow_seed.stamina_cost = 0;//500;
+    grow_seed.energy_cost = 50;//500;
+    grow_seed.stamina_cost = 50;//500;
 
     distribute_seed.cooldown_max = 300;
-    distribute_seed.duration = 200;
-    distribute_seed.energy_cost = 0;//100;
-    distribute_seed.stamina_cost = 0;//100;
+    distribute_seed.duration = 300;
+    distribute_seed.energy_cost = 30;//100;
+    distribute_seed.stamina_cost = 300;//100;
     flower_range = 10;
-    seed_range = 10;
+    seed_range = 3;
     seed_energy = 100;
-    probability_grow = 0.4;
-    probability_distribute = 0.4;
+    probability_grow = 0.5;
+    probability_distribute = 0.5;
 
     probability_notice_partner = 0.5;
     if(can_reproduce_asexually) {
-        probability_notice_partner = 0.1;
+        probability_notice_partner = 0.05;
     }
 }
 
@@ -359,10 +405,10 @@ bool Life::act(LifeDoState ids, bool force) {
     Life_Action* current_action = life_actions[do_state];
     if(force) {
         this_action->cooldown = 0;
-        current_action->time = 0;
-        current_action->action_end = 0;
+        //current_action->time = 0;
+        //current_action->action_end = 0;
     }
-    if((this_action->cooldown==0)&&(current_action->time==0)&&(current_action->action_end==0)) {
+    if((this_action->cooldown==0)/*&&(current_action->time==0)&&(current_action->action_end==0)*/) {
         do_state = ids;
         this_action->time = this_action->duration;
         out = 1;
@@ -375,28 +421,44 @@ void Life::tick() {
     for(int i = 0; i < LIFE_N_ACTIONS; i++) {
         this_action = life_actions[i];
         if(this_action->cooldown>0) this_action->cooldown--;
-        if(this_action->time>0) {
-            if(i==LIFE_DO_STATE_EAT) {
-                double this_dE = eat_efficiency*(double)this_action->energy_cost/(double)this_action->duration;
-                if((eat_cap>0.0)&&(fabs(this_dE)>eat_cap)) this_dE = -eat_cap;
-                energy -= this_dE;
-            } else {
-                energy -= (double)this_action->energy_cost/(double)this_action->duration;
-            }
-            stamina -= (double)this_action->stamina_cost/(double)this_action->duration;
-            if(energy < 0.0) energy = 0.0;
-            if(stamina < 0.0) stamina = 0.0;
-            this_action->time--;
-            if(this_action->time==0) {
-                this_action->action_end = 1;
+        if((do_state==i)||(this_action->background)) {
+            if(this_action->time>0) {
+                if(i==LIFE_DO_STATE_EAT) {
+                    double this_dE = eat_efficiency*(double)this_action->energy_cost/(double)this_action->duration;
+                    if((eat_cap>0.0)&&(fabs(this_dE)>(eat_cap/(double)this_action->duration))) this_dE = -eat_cap/(eat_cap/(double)this_action->duration);
+                    energy -= this_dE;
+                } else {
+                    energy -= (double)this_action->energy_cost/(double)this_action->duration;
+                }
+                stamina -= (double)this_action->stamina_cost/(double)this_action->duration;
+                if(energy < 0.0) energy = 0.0;
+                if(stamina < 0.0) stamina = 0.0;
+                this_action->time--;
+                if(this_action->time==0) {
+                    this_action->action_end = 1;
+                    this_action->cooldown = this_action->cooldown_max;
+                    //if(i==LIFE_DO_STATE_GESTATE) cout << "WILL TRY TO BIRTH" << endl;
+                }
             }
         }
     }
     if(stamina > 0.0) can_do = 1;
     else can_do = 0;
     if(stamina > stamina_max) stamina = stamina_max;
+    age++;
 }
 
 Life_Action* Life::getCurrentAction() {
     return life_actions[do_state];
+}
+
+void Life::kill() {
+    alive = 0;
+    stamina = 0;
+    for(int i = 0; i < LIFE_N_ACTIONS; i++) {
+        life_actions[i]->time = 0;
+        life_actions[i]->action_end = 0;
+        life_actions[i]->cooldown = 0;
+    }
+    act(LIFE_DO_STATE_DECAY,true);
 }

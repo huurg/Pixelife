@@ -9,6 +9,7 @@ struct Life_Action {
     int duration = 0;
     int time = 0;
     bool action_end = 0; //Only set to 1 for first frame that time goes to 0 (by tick).
+    bool background = 0;
 
     Life_Action();
 };

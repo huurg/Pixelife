@@ -44,12 +44,14 @@ enum LifeDoState {
 
 struct Life : public EnvironmentObject {
     bool alive = 1;
+    int age = 0;
     double energy = LIFE_DEFAULT_ENERGY;
     Gender gender = GENDER_NULL;
     LifeType type = LIFE_TYPE_NULL;
     double stamina = LIFE_DEFAULT_STAMINA;
     double stamina_max = LIFE_DEFAULT_STAMINA;//
     Life_Action idle;//
+    double resume_probability = 1.0;
     Life_Action rest;
     Life_Action eat;//
     double eat_efficiency = 1.0; // Used for external factors e.g. sun
@@ -106,8 +108,8 @@ struct Life : public EnvironmentObject {
     int seed_range = 10; //
     int seeds = 0;
     int seed_energy = 100; // Per seed cost
-    double probability_grow = 0.05;
-    double probability_distribute = 0.05;
+    double probability_grow = 0.005;
+    double probability_distribute = 0.005;
 
     double probability_notice_partner = 0.5; //
     Life_Action* life_actions[LIFE_N_ACTIONS];
@@ -127,6 +129,7 @@ struct Life : public EnvironmentObject {
 
     Life_Action* getCurrentAction();
 
+    void kill();
     bool act(LifeDoState ids, bool force = 0); // set do state and set time = duration
     void tick();// Update counters for action cooldown and time as well as decrement energy and life according to costs/duration
 

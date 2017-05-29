@@ -114,10 +114,10 @@ void LC_RenderObject::coordsScreenToWorld(int* ox, int* oy, int* ow, int* oh) co
     double owd = *ow;
     double ohd = *oh;
     coordsScreenToWorld(&oxd,&oyd,&owd,&ohd);
-    *ox = oxd;
-    *oy = oyd;
-    *ow = owd;
-    *oh = ohd;
+    *ox = round(oxd);
+    *oy = round(oyd);
+    *ow = round(owd);
+    *oh = round(ohd);
 }
 
 void LC_RenderObject::moveCamera(int dx, int dy, double dz) {

@@ -487,11 +487,16 @@ bool LC_Environment::moveLife(int life_ind, int dx, int dy) {
         xp%=env_width;
         yp%=env_height;
         if(isOccupiable(xp,yp)) {
-            life_grid[xp][yp]=this_life;
-            life_grid[x][y] = NULL;
-            this_life->x = xp;
-            this_life->y = yp;
-            out = 1;
+            Terrain* this_terrain = terrain_grid[xp][yp];
+            if(this_terrain) {
+                if(!((this_terrain->colour.r==0)&&(this_terrain->colour.g==0)&&(this_terrain->colour.b>=128))) {
+                    life_grid[xp][yp]=this_life;
+                life_grid[x][y] = NULL;
+                this_life->x = xp;
+                this_life->y = yp;
+                out = 1;
+                }
+            }
         }
     }
 
@@ -523,8 +528,29 @@ void LC_Environment::updateLife(Life* in_l) {
         int this_x = in_l->x;
         int this_y = in_l->y;
         int this_id = in_l->id;
-        if(in_l->can_die) {
+        if(in_l->can_die||((!in_l->can_die)&&(in_l->age>10000))) {
             if((!terrain_grid[this_x][this_y])||(!terrain_grid[this_x][this_y]->occupiable)||(in_l->energy<=0.0)) {
+                // if bombplant, destroy life in surrounding area with high probability
+                double this_bomb_p = Utils::rand_d();
+                if(in_l->v_r&&in_l->v_g&&(in_l->w_g>in_l->w_r)) {
+                    if(Utils::rand_d()<this_bomb_p/5) {
+                        dia.diamond_x = this_x;
+                        dia.diamond_y = this_y;
+                        dia.diamond_d = 1+50*pow(1.0-this_bomb_p,8);
+                        for(int i = 1; i < dia.getN();i++) {
+                            int i_x, i_y;
+                            bool b = dia.iToXY(i,&i_x,&i_y);
+                            if((i_x!=this_x)&&(i_y!=this_y)) {
+                                if(b&&life_grid[i_x][i_y]&&(Utils::rand_d()<0.8)) {
+                                    eraseLife(i_x,i_y);
+                                    refreshIDList();
+                                }
+                            }
+                        }
+                    }
+                }
+
+
                 eraseLife(this_x,this_y);
                 in_l = NULL;
                 refreshIDList();
@@ -532,82 +558,111 @@ void LC_Environment::updateLife(Life* in_l) {
         }
     }
     if(in_l) {
+
         if(in_l->alive) {
             if(in_l->can_eat_sun) {
                 in_l->eat_efficiency = sun_efficiency;
             }
-
-            Life_Action* this_la = in_l->getCurrentAction();
+            Life_Action* this_la = NULL;//in_l->getCurrentAction();
             if(in_l->can_do) {
-                if(this_la->time<=0) {
-                    bool chosen = 0;
-                    if(this_la->action_end) {
-                        // Do final frame actions
-                        switch(in_l->do_state) {
-                            case LIFE_DO_STATE_IDLE:
-                                this_la->action_end = 0;
-                                break;
-                            case LIFE_DO_STATE_EAT:
-                                this_la->action_end = 0;
-                                break;
-                            case LIFE_DO_STATE_DECAY:
+                if(in_l->can_eat_sun) {
+                    // Start infinite eat cycle
+                    if((in_l->eat.time==0)&&(in_l->eat.action_end==0)&&(in_l->eat.cooldown==0)) {
+                        in_l->eat.time = in_l->eat.duration;
+                    }
+                }
+                bool chosen = 0;
+                // Do final frame actions for all actions that have time == 0 and action_end = 1
+                for(int i = 0; i < LIFE_N_ACTIONS; i++) {
+                    this_la = in_l->life_actions[i];
+                    if(this_la->time<=0) {
+                        if(this_la->action_end) {
+                            switch(i) {
+                                case LIFE_DO_STATE_IDLE:
+                                    this_la->action_end = 0;
+                                    break;
+                                case LIFE_DO_STATE_EAT:
+                                    this_la->action_end = 0;
+                                    break;
+                                case LIFE_DO_STATE_DECAY:
 
-                                break;
-                            case LIFE_DO_STATE_WALK:
-                                this_la->action_end = 0;
-                                break;
-                            case LIFE_DO_STATE_RUN:
+                                    break;
+                                case LIFE_DO_STATE_WALK:
+                                    this_la->action_end = 0;
+                                    break;
+                                case LIFE_DO_STATE_RUN:
 
-                                break;
-                            case LIFE_DO_STATE_MATE:
-                                this_la->action_end = 0;
-                                if((in_l->can_reproduce_sexually)&&(in_l->gender==GENDER_FEMALE)&&(in_l->child)) {
-                                    //chosen = in_l->act(LIFE_DO_STATE_GESTATE);
-                                    delete in_l->child;
-                                    in_l->act(LIFE_DO_STATE_IDLE,true);
-                                    //cout << "Mating failed!" << endl;
-                                }
-                                break;
-                            case LIFE_DO_STATE_GESTATE:
-                                // switch to give birth state
-                                this_la->action_end = 0;
-                                if((in_l->can_reproduce_sexually)&&(in_l->gender==GENDER_FEMALE)&&(in_l->child)) {
-                                    chosen = in_l->act(LIFE_DO_STATE_GIVE_BIRTH);
-                                    //if(chosen) cout << "Labour!" << endl;
-                                }
-                                break;
-                            case LIFE_DO_STATE_GIVE_BIRTH:
-                                this_la->action_end = 0;
-                                if((in_l->can_reproduce_sexually)&&(in_l->gender==GENDER_FEMALE)&&(in_l->child)) {
-                                    delete in_l->child;
-                                    in_l->child = NULL;
-                                }
-                                // Try to give birth each frame until successful (perhaps add miscarriage feature
-                                break;
-                            case LIFE_DO_STATE_FLOWER:
-                                this_la->action_end = 0;
-                                break;
-                            case LIFE_DO_STATE_GROW_SEED:
-                                // switch to distribute seeds
-                                this_la->action_end = 0;
-                                chosen = in_l->act(LIFE_DO_STATE_DISTRIBUTE_SEED,true);
-                                break;
-                            case LIFE_DO_STATE_DISTRIBUTE_SEED:
-                                this_la->action_end = 0;
-                                if(in_l->parent) {
-                                    delete in_l->parent;
-                                    in_l->parent = NULL;
-                                }
-                                in_l->seeds = 0;
-                                break;
-                            case LIFE_DO_STATE_REST:
-                                this_la->action_end = 0;
-                                break;
-                            default:
-                                break;
+                                    break;
+                                case LIFE_DO_STATE_MATE:
+                                    if((!chosen)&&(in_l->can_reproduce_sexually)&&(in_l->gender==GENDER_FEMALE)&&(in_l->child)) {
+                                        //chosen = in_l->act(LIFE_DO_STATE_GESTATE);
+                                        chosen = in_l->act(LIFE_DO_STATE_IDLE);
+                                        if(chosen) {
+                                            delete in_l->child;
+                                            in_l->child = NULL;
+                                            this_la->action_end = 0;
+                                            //cout << "Mating failed!" << endl;
+                                        }
+                                    }
+                                    break;
+                                case LIFE_DO_STATE_GESTATE:
+                                    // switch to give birth state
+                                    //cout << "Trying to birth..." << endl;
+                                    if((!chosen)&&(in_l->can_reproduce_sexually)&&(in_l->gender==GENDER_FEMALE)&&(in_l->child)) {
+                                        chosen = in_l->act(LIFE_DO_STATE_GIVE_BIRTH);
+                                        if(chosen) this_la->action_end = 0;
+                                        //if(chosen) cout << "Labour!" << endl;
+                                    }
+                                    break;
+                                case LIFE_DO_STATE_GIVE_BIRTH:
+                                    if((in_l->can_reproduce_sexually)&&(in_l->gender==GENDER_FEMALE)&&(in_l->child)) {
+                                        this_la->action_end = 0;
+                                        delete in_l->child;
+                                        in_l->child = NULL;
+                                    }
+                                    // Try to give birth each frame until successful (perhaps add miscarriage feature
+                                    break;
+                                case LIFE_DO_STATE_FLOWER:
+                                    this_la->action_end = 0;
+                                    break;
+                                case LIFE_DO_STATE_GROW_SEED:
+                                    // switch to distribute seeds
+                                    if(!chosen) {
+                                        chosen = in_l->act(LIFE_DO_STATE_DISTRIBUTE_SEED);
+                                        if(chosen) this_la->action_end = 0;
+                                    }
+                                    break;
+                                case LIFE_DO_STATE_DISTRIBUTE_SEED:
+                                    if(in_l->parent) {
+                                        delete in_l->parent;
+                                        in_l->parent = NULL;
+                                    }
+                                    in_l->seeds = 0;
+                                    this_la->action_end = 0;
+                                    break;
+                                case LIFE_DO_STATE_REST:
+                                    this_la->action_end = 0;
+                                    break;
+                                default:
+                                    break;
+                            }
                         }
                     }
+                }
+                this_la = in_l->getCurrentAction();
 
+                // If current action time == 0 and all actions are completely finished pick try a new activity
+                if(this_la->time<=0) {                    // Try resume an activity with time > 0 (apart from gestate
+                    if(in_l->do_state==LIFE_DO_STATE_IDLE) {
+                        for(int j = 0; (!chosen)&&(j < LIFE_N_ACTIONS); j++) {
+                            Life_Action* this_action = in_l->life_actions[j];
+                            if((Utils::rand_d()<in_l->resume_probability)&&(this_action->time>0)&&(in_l->do_state!=j)&&(j!=LIFE_DO_STATE_IDLE)&&(!this_action->background)) {
+                                chosen = 1;
+                                LifeDoState this_ds = static_cast<LifeDoState>(j);
+                                in_l->do_state = this_ds;
+                            }
+                        }
+                    }
                     // Choose new action:
                         // Try Reproduce
                     if(!chosen&&in_l->can_reproduce_sexually&&(Utils::rand_d()<in_l->probability_notice_partner)) {
@@ -615,9 +670,9 @@ void LC_Environment::updateLife(Life* in_l) {
                         if(this_m) {
                             chosen = in_l->act(LIFE_DO_STATE_MATE);
                             if(chosen) {
-                                //cout << "Mated!" << endl;
-                                in_l->move_direction_x = 0;
-                                in_l->move_direction_y = 0;
+                                //cout << "Mating!" << endl;
+                                //in_l->move_direction_x = 0;
+                                //in_l->move_direction_y = 0;
                                 this_m->move_direction_x = 0;
                                 this_m->move_direction_y = 0;
                                 this_m->act(LIFE_DO_STATE_MATE,true);
@@ -647,10 +702,10 @@ void LC_Environment::updateLife(Life* in_l) {
                         if(this_m) {
                             chosen = in_l->act(LIFE_DO_STATE_EAT);
                             if(chosen) {
-                                in_l->move_direction_x = 0.0;
-                                in_l->move_direction_y = 0.0;
-                                if(this_m->alive&&(!this_m->can_be_eaten_alive)) {
-                                    this_m->alive = 0;
+                                //in_l->move_direction_x = 0.0;
+                                //in_l->move_direction_y = 0.0;
+                                if((!this_m->can_be_eaten_alive)&&this_m->alive) {
+                                    this_m->kill();
                                 }
                                 if(this_m->energy<(-in_l->eat.energy_cost)) {
                                     in_l->eat_cap = this_m->energy;
@@ -663,37 +718,74 @@ void LC_Environment::updateLife(Life* in_l) {
                         }
                     }
                             // Try eat sun
+                    /*
                     if(!chosen&&!(Utils::rand_d()<in_l->probability_ignore_food)) {
                         if(in_l->can_eat_sun) {
                             chosen = in_l->act(LIFE_DO_STATE_EAT);
                         }
                     }
+                    */
                         // Try flee/hunt
-                        // Try move/idle
+
                     // Try resume labour
+                    /*
                     if((!chosen)&&(in_l->can_reproduce_sexually)&&(in_l->gender==GENDER_FEMALE)&&(in_l->child)) {
                         chosen = in_l->act(LIFE_DO_STATE_GESTATE,true);
-                    }
+                    }*/
+                    // Try move/idle
                     if((!chosen)&&(in_l->can_move)&&(Utils::rand_d()<(1.0-in_l->probability_idle))) {
                         chosen = in_l->act(LIFE_DO_STATE_WALK);
                         if(chosen) {
                             in_l->randomizeDirection();
                             //Update position
                             moveLife(in_l->id,in_l->move_direction_x,in_l->move_direction_y);
+
+                            // If a demon and there is life in front of it now, kill the life
+                            if(!(in_l->v_r||in_l->v_g||in_l->v_b)) {
+                                if(in_l->move_direction_x||in_l->move_direction_y) {
+                                    Life* flife = life_grid[in_l->x+in_l->move_direction_x][in_l->y+in_l->move_direction_y];
+                                    if(flife) {
+                                        if(flife->colour.r||flife->colour.g||flife->colour.b) {
+                                            eraseLife(flife->x,flife->y);
+                                            in_l->age += 5000;
+                                            in_l->can_die = 1;
+                                            in_l->energy = 0.0;
+                                            refreshIDList();
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                     if(!chosen) {
                         chosen = in_l->act(LIFE_DO_STATE_IDLE);
                         if(chosen) {
-                            in_l->move_direction_x = 0;
-                            in_l->move_direction_y = 0;
+                            //in_l->move_direction_x = 0;
+                            //in_l->move_direction_y = 0;
+
+                            // If an angel, create random colour life adjacent to itself
+                            if(in_l->v_r&&in_l->v_g&&in_l->v_b) {
+                                dia.diamond_x = in_l->x;
+                                dia.diamond_y = in_l->y;
+                                dia.diamond_d = 1;
+                                int tile = Utils::rand_i(0,3);
+                                int i_x, i_y;
+                                bool b = dia.idToXY(tile,1,&i_x,&i_y);
+                                if(!life_grid[i_x][i_y]) {
+                                    spawnLife(Utils::rand_i(0,255),Utils::rand_i(0,255),Utils::rand_i(0,255),i_x,i_y);
+                                    in_l->age += 5000;
+                                    refreshIDList();
+                                }
+                            }
                         }
                     }
                 } else {
-                    // If flowering/mating check if fertilization successful:
-                    // p' = 1 - (1 - mateProbability)^(1.0/duration)
-                    // If successful switch immediately to gestate/grow seeds
-                    // If distributing seeds, try to spread a seed every frame (with p') until all gone
+                    // If current do state time > 0
+                        // If flowering/mating check if fertilization successful:
+                        // p' = 1 - (1 - mateProbability)^(1.0/duration)
+                        // If successful switch immediately to gestate/grow seeds
+                        // If distributing seeds, try to spread a seed every frame (with p') until all gone
+
                     switch(in_l->do_state) {
                         case LIFE_DO_STATE_GIVE_BIRTH:
                             {
@@ -724,14 +816,20 @@ void LC_Environment::updateLife(Life* in_l) {
                             }
                             break;
                         case LIFE_DO_STATE_GESTATE:
-                            //cout << "A";
+                            //cout << "Switching to idle: gestation time = " << in_l->gestate.time << endl;
+                            in_l->gestate.background = 1;
+                            in_l->do_state = LIFE_DO_STATE_IDLE;
                             break;
                         case LIFE_DO_STATE_MATE:
                             if(in_l->gender==GENDER_FEMALE) {
                                 if(Utils::rand_d()<(1.0-pow(1.0-in_l->pregnancy_probability,1.0/in_l->mate.duration))) {
                                     //in_l->child = Life::MixChromenes(in_l,this_m);
-                                    in_l->act(LIFE_DO_STATE_GESTATE,true);
-                                    //cout << "Gestating!" << endl;
+                                    bool this_b = in_l->act(LIFE_DO_STATE_GESTATE);
+                                    if(this_b) {
+                                        in_l->mate.time = 0;
+                                        in_l->mate.action_end = 0;
+                                        //cout << "Gestating!" << endl;
+                                    }
                                 }
                             }
                             break;
@@ -747,7 +845,11 @@ void LC_Environment::updateLife(Life* in_l) {
                                     if((this_m->do_state==LIFE_DO_STATE_FLOWER)&&(Utils::rand_d()<(1.0-pow(1.0-Life::mateProbability(in_l,this_m),1.0/in_l->flower.duration)))) {
 
                                         if(!in_l->parent) in_l->parent = new Life((int)this_m->colour.r,(int)this_m->colour.g,(int)this_m->colour.b);
-                                        in_l->act(LIFE_DO_STATE_GROW_SEED,true);
+                                        bool this_b = in_l->act(LIFE_DO_STATE_GROW_SEED);
+                                        if(this_b){
+                                            in_l->flower.time = 0;
+                                            in_l->flower.action_end = 0;
+                                        }
                                         //cout << "Making seeds: Parent = " << (bool)(in_l->parent) << endl;
                                     }
                                 }
@@ -779,31 +881,35 @@ void LC_Environment::updateLife(Life* in_l) {
                                     int this_x, this_y;
                                     bool b = dia.iToXY(this_i,&this_x,&this_y);
                                     if(b&&isOccupiable(this_x,this_y)) {
-                                        int this_id = nextLifeID();
-                                        Life* this_child = Life::MixChromenes(in_l,in_l->parent);
-                                        life_list[this_id] = this_child;
-                                        life_grid[this_x][this_y] = this_child;
-                                        this_child->id = this_id;
-                                        this_child->x = this_x;
-                                        this_child->y = this_y;
-                                        this_child += in_l->seed_energy;
-                                        in_l->energy -= in_l->seed_energy;
-                                        n_life++;
-                                        refreshIDList();
-                                        cout << "Seed planted!" << endl;
-                                        in_l->seeds--;
-                                        LC_lives_born++;
+                                        Terrain* this_terrain = terrain_grid[this_x][this_y];
+                                        // If not a grey terrain
+                                        if(!((this_terrain->colour.r==this_terrain->colour.g)&&(this_terrain->colour.g==this_terrain->colour.b))) {
+                                            int this_id = nextLifeID();
+                                            Life* this_child = Life::MixChromenes(in_l,in_l->parent);
+                                            life_list[this_id] = this_child;
+                                            life_grid[this_x][this_y] = this_child;
+                                            this_child->id = this_id;
+                                            this_child->x = this_x;
+                                            this_child->y = this_y;
+                                            this_child += in_l->seed_energy;
+                                            in_l->energy -= in_l->seed_energy;
+                                            n_life++;
+                                            refreshIDList();
+                                            cout << "Seed planted!" << endl;
+                                            in_l->seeds--;
+                                            LC_lives_born++;
+                                        }
                                     }
                                 }
                             }
                     }
                 }
             } else {
-                // If no stamina, interrupt current action and force idle
+                // If can't do
+                    // If no stamina, interrupt current action and force idle
                 in_l->act(LIFE_DO_STATE_REST,true);
                 in_l->move_direction_x = 0;
                 in_l->move_direction_y = 0;
-                in_l->can_do;
             }
 
             in_l->tick();
@@ -847,6 +953,7 @@ void LC_Environment::updateLife(Life* in_l) {
         // Recover/idle
         // Decrement cooldowns/update do_state
         } else {
+            // If not alive
             in_l->act(LIFE_DO_STATE_DECAY,true);
             in_l->tick();
         }
